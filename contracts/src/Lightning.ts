@@ -6,28 +6,74 @@ import {
   Permissions,
   Field,
   UInt64,
+  UInt32,
   PublicKey,
   Experimental,
   MerkleMapWitness,
   Poseidon,
+  SelfProof,
+  Struct,
+  Circuit
 } from 'snarkyjs';
 import { ExampleToken } from './Token';
 
-const Recursive = Experimental.ZkProgram({
-  publicInput: Field,
+
+export class RecursivePublicInput extends Struct({
+  user1: PublicKey,
+  user2: PublicKey,
+  balance1Witness: MerkleMapWitness,
+  balance2Witness: MerkleMapWitness,
+  balanceRoot: Field,
+  user1Balance: Field,
+  user2Balance: Field,
+  transferFrom1to2: Field
+}) {}
+
+export const RecursiveProgram = Experimental.ZkProgram({
+  publicInput: RecursivePublicInput,
 
   methods: {
-    run: {
+    /**
+     * baseCase only verifies witnesses. No transfer of funds should be made in this step.
+     */
+    baseCase: {
       privateInputs: [],
 
-      method(publicInput: Field) {
-        publicInput.assertEquals(Field(0));
+      method(publicInput: RecursivePublicInput) {
+        const {user1Balance, user2Balance, balance1Witness, balance2Witness, balanceRoot, transferFrom1to2} = publicInput
+        let [balanceRootBefore] =
+          balance1Witness.computeRootAndKey(user1Balance);
+        balanceRootBefore.assertEquals(balanceRoot, "balance1Witness does not match root");
+        [balanceRootBefore] =
+          balance2Witness.computeRootAndKey(user2Balance);
+        balanceRootBefore.assertEquals(balanceRoot, "balance2Witness does not match root");
+        transferFrom1to2.assertEquals(Field(0), 'In the baseCase transfer amount should be 0')
+      },
+    },
+
+    step: {
+      privateInputs: [SelfProof],
+
+      /**
+       * this method only cares about publicInput.transferFrom1To2
+       * notice that transferFrom1To2 can be negative depending on who is transferring to who
+       */
+      method(publicInput: RecursivePublicInput, earlierProof: SelfProof<RecursivePublicInput>) {
+        // verify earlier proof
+        earlierProof.verify();
+
+        earlierProof.publicInput.user1Balance.sub(publicInput.transferFrom1to2)
+        earlierProof.publicInput.user2Balance.add(publicInput.transferFrom1to2)
+
+        // assert balances are greater than 0
+        earlierProof.publicInput.user1Balance.assertGreaterThan(0, "user1 balance cannot be < 0 due to this transfer")
+        earlierProof.publicInput.user2Balance.assertGreaterThan(0, "user2 balance cannot be < 0 due to this transfer")
       },
     },
   },
 });
 
-const RecursiveProof = Experimental.ZkProgram.Proof(Recursive);
+export class RecursiveProof extends Experimental.ZkProgram.Proof(RecursiveProgram) {}
 
 export class Lightning extends SmartContract {
   /**
@@ -61,12 +107,13 @@ export class Lightning extends SmartContract {
   }
 
   /**
-   * Deposits a particular token balance and locks it for x blocks
+   * Deposits a particular token balance and locks it for at least the next 5 blocks
    */
   @method deposit(
     userAddress: PublicKey,
     tokenAddress: PublicKey,
     tokenAmount: UInt64,
+    timeLock: UInt32,
     timeLockBefore: Field,
     balanceBefore: Field,
     timeLockPath: MerkleMapWitness,
@@ -77,7 +124,8 @@ export class Lightning extends SmartContract {
     this.network.blockchainLength.assertEquals(
       this.network.blockchainLength.get()
     );
-    const lockUntilBlock = blockHeight.add(1000);
+    
+    timeLock.assertGreaterThan(blockHeight.add(5), "timeLock must be at least 5 blocks ahead")
 
     // deposit tokens from the user to this contract
     token.sendTokens(userAddress, this.address, tokenAmount);
@@ -86,26 +134,26 @@ export class Lightning extends SmartContract {
     const timeLockRoot = this.timeLockMerkleMapRoot.get();
     this.timeLockMerkleMapRoot.assertEquals(timeLockRoot);
 
-    const balanceRoot = this.timeLockMerkleMapRoot.get();
+    const balanceRoot = this.balanceMerkleMapRoot.get();
     this.balanceMerkleMapRoot.assertEquals(balanceRoot);
 
     const [timeLockRootBefore, timeLockKey] =
       timeLockPath.computeRootAndKey(timeLockBefore);
-    timeLockRootBefore.assertEquals(timeLockRoot);
+    timeLockRootBefore.assertEquals(timeLockRoot, "deposit time lock root not equal");
     timeLockKey.assertEquals(
-      this.serializeTimeLockKey(userAddress, tokenAddress)
+      this.serializeTimeLockKey(userAddress, tokenAddress), "deposit time lock keys not equal"
     );
 
     const [balanceRootBefore, balanceKey] =
       balancePath.computeRootAndKey(balanceBefore);
-    balanceRootBefore.assertEquals(balanceRoot);
+    balanceRootBefore.assertEquals(balanceRoot, "deposit balance root not equal");
     balanceKey.assertEquals(
-      this.serializeBalancekKey(userAddress, tokenAddress)
+      this.serializeBalancekKey(userAddress, tokenAddress), "deposit balance keys not equal"
     );
 
     // compute the new timeLock root after adding more time lock to the user's deposit
     const [newTimeLockRoot] = timeLockPath.computeRootAndKey(
-      Field.fromFields(lockUntilBlock.toFields())
+      Field.fromFields(timeLock.toFields())
     );
     // compute the new root after incrementing the balance for the user for that token
     const [newBalanceRoot] = balancePath.computeRootAndKey(
@@ -117,15 +165,41 @@ export class Lightning extends SmartContract {
     this.balanceMerkleMapRoot.set(newBalanceRoot);
   }
 
-  @method sendTokens(
+  @method postProof(
     tokenAddress: PublicKey,
-    senderAddress: PublicKey,
-    receiverAddress: PublicKey,
-    amount: UInt64
+    userAddress: PublicKey,
+    balanceWitness: MerkleMapWitness,
+    balance: Field,
+    proof: RecursiveProof
   ) {
-    // TODO: verify proof
+    proof.verify()
+    const { user1Balance, user2Balance, user1 } = proof.publicInput
+
+    const balanceRoot = this.balanceMerkleMapRoot.get();
+    this.balanceMerkleMapRoot.assertEquals(balanceRoot);
+
+    const [balanceRootBefore, balanceKey] = balanceWitness.computeRootAndKey(balance);
+    balanceRootBefore.assertEquals(balanceRoot);
+    balanceKey.assertEquals(
+      this.serializeBalancekKey(userAddress, tokenAddress)
+    );
+
+    const newBalance = Circuit.if(userAddress.equals(user1), user1Balance, user2Balance)
+
+    let [newBalanceRoot] = balanceWitness.computeRootAndKey(
+      newBalance
+    );
+
+    this.balanceMerkleMapRoot.set(newBalanceRoot);
+  }
+
+  @method withdraw(
+    tokenAddress: PublicKey,
+    userAddress: PublicKey
+  ) {
+    // TODO: verify time lock
     const token = new ExampleToken(tokenAddress);
-    token.sendTokens(senderAddress, receiverAddress, amount);
+    // TODO: send balance to userAddress
   }
 
   @method serializeTimeLockKey(

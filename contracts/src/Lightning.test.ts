@@ -1,4 +1,4 @@
-import { Lightning } from './Lightning';
+import { Lightning, RecursiveProgram, RecursivePublicInput } from './Lightning';
 import { ExampleToken } from './Token';
 import {
   isReady,
@@ -82,6 +82,22 @@ describe('Lightning', () => {
     await txn.sign([deployerKey, zkAppPrivateKey, tokenPrivateKey]).send();
   }
 
+  async function mint(userAddress: PublicKey) {
+    const txn = await Mina.transaction(deployerAccount, () => {
+      AccountUpdate.fundNewAccount(deployerAccount);
+      tokenApp.mint(
+        userAddress,
+        amount100,
+        Signature.create(tokenPrivateKey, [
+          ...amount100.toFields(),
+          ...userAddress.toFields(),
+        ])
+      );
+    });
+    await txn.prove();
+    await txn.sign([deployerKey]).send();
+  }
+
   it('correctly serializes timeLockMerkleRoot key', async () => {
     await localDeploy();
 
@@ -107,28 +123,14 @@ describe('Lightning', () => {
   it('initial deposit', async () => {
     await localDeploy();
 
-    const userAddressPrivate = PrivateKey.random();
-    const userAddress = userAddressPrivate.toPublicKey();
-
     expect(tokenApp.totalAmountInCirculation.get()).toEqual(UInt64.from(0));
 
-    // mint
-    const txn = await Mina.transaction(deployerAccount, () => {
-      AccountUpdate.fundNewAccount(deployerAccount);
-      tokenApp.mint(
-        userAddress,
-        amount100,
-        Signature.create(tokenPrivateKey, [
-          ...amount100.toFields(),
-          ...userAddress.toFields(),
-        ])
-      );
-    });
-    await txn.prove();
-    await txn.sign([deployerKey]).send();
-    expect(Mina.getBalance(userAddress, tokenApp.token.id)).toEqual(amount100);
-    //
+    const userAddressPrivate = PrivateKey.random();
+    const userAddress = userAddressPrivate.toPublicKey();
+    const timeLock = Mina.LocalBlockchain().getNetworkState().blockchainLength.add(1000)
 
+    await mint(userAddress)
+    
     // deposit
     const timeLockWitness = timeLockMerkleMap.getWitness(
       zkApp.serializeTimeLockKey(userAddress, tokenAddress)
@@ -142,6 +144,7 @@ describe('Lightning', () => {
         userAddress,
         tokenAddress,
         amount100,
+        timeLock,
         Field(0),
         Field(0),
         timeLockWitness,
@@ -154,5 +157,156 @@ describe('Lightning', () => {
     expect(Mina.getBalance(userAddress, tokenApp.token.id)).toEqual(
       UInt64.from(0)
     );
+
+    expect(Mina.getBalance(zkAppAddress, tokenApp.token.id)).toEqual(
+      amount100
+    );
+  });
+
+  it('state channel', async () => {
+    await localDeploy();
+
+    const userAddressPrivate = PrivateKey.random();
+    const userAddress = userAddressPrivate.toPublicKey();
+
+    const user2AddressPrivate = PrivateKey.random();
+    const user2Address = user2AddressPrivate.toPublicKey();
+
+    const timeLock = Mina.LocalBlockchain().getNetworkState().blockchainLength.add(1000)
+
+    // mint tokens for user1
+    await mint(userAddress)
+    
+    // deposit for user1
+    const timeLockWitness = timeLockMerkleMap.getWitness(
+      zkApp.serializeTimeLockKey(userAddress, tokenAddress)
+    );
+    const balanceWitness = balanceMerkeleMap.getWitness(
+      zkApp.serializeBalancekKey(userAddress, tokenAddress)
+    );
+    const txn1 = await Mina.transaction(deployerAccount, () => {
+      AccountUpdate.fundNewAccount(deployerAccount);
+      zkApp.deposit(
+        userAddress,
+        tokenAddress,
+        amount100,
+        timeLock,
+        Field(0),
+        Field(0),
+        timeLockWitness,
+        balanceWitness
+      );
+    });
+    await txn1.prove();
+    await txn1.sign([deployerKey, userAddressPrivate]).send();
+
+    // update balance merkle map to reflect the user deposit
+    balanceMerkeleMap.set(zkApp.serializeBalancekKey(userAddress, tokenAddress), Field.fromFields(amount100.toFields()));
+    expect(zkApp.balanceMerkleMapRoot.get()).toEqual(balanceMerkeleMap.getRoot());
+    // update time lock merkle map to reflect the deposit
+    timeLockMerkleMap.set(zkApp.serializeTimeLockKey(userAddress, tokenAddress), Field.fromFields(timeLock.toFields()));
+    expect(zkApp.timeLockMerkleMapRoot.get()).toEqual(timeLockMerkleMap.getRoot());
+
+
+    const balance2Witness = balanceMerkeleMap.getWitness(
+      zkApp.serializeBalancekKey(user2Address, tokenAddress)
+    );
+    const timeLock2Witness = timeLockMerkleMap.getWitness(
+      zkApp.serializeTimeLockKey(user2Address, tokenAddress)
+    );
+
+    // deposit for user2
+    const txnX = await Mina.transaction(deployerAccount, () => {
+      AccountUpdate.fundNewAccount(deployerAccount);
+      zkApp.deposit(
+        user2Address,
+        tokenAddress,
+        UInt64.from(0),
+        timeLock,
+        Field(0),
+        Field(0),
+        timeLock2Witness,
+        balance2Witness
+      );
+    });
+    await txnX.prove();
+    await txnX.sign([deployerKey, user2AddressPrivate]).send();
+
+    // update balance merkle map to reflect the user2 deposit
+    balanceMerkeleMap.set(zkApp.serializeBalancekKey(user2Address, tokenAddress), Field(0));
+    expect(zkApp.balanceMerkleMapRoot.get()).toEqual(balanceMerkeleMap.getRoot());
+    // update time lock merkle map to reflect the user2 deposit
+    timeLockMerkleMap.set(zkApp.serializeTimeLockKey(user2Address, tokenAddress), Field.fromFields(timeLock.toFields()));
+    expect(zkApp.timeLockMerkleMapRoot.get()).toEqual(timeLockMerkleMap.getRoot());
+
+
+    // run the state channel
+    const newBalance1Witness = balanceMerkeleMap.getWitness(
+      zkApp.serializeBalancekKey(userAddress, tokenAddress)
+    );
+    const newBalance2Witness = balanceMerkeleMap.getWitness(
+      zkApp.serializeBalancekKey(user2Address, tokenAddress)
+    );
+
+    const publicInput = {
+      user1: userAddress,
+      user2: user2Address,
+      balanceRoot: zkApp.balanceMerkleMapRoot.get(),
+      balance1Witness: newBalance1Witness,
+      balance2Witness: newBalance2Witness,
+      user1Balance: Field.fromFields(amount100.toFields()),
+      user2Balance: Field(0),
+      transferFrom1to2: Field(0)
+    }
+
+    await RecursiveProgram.compile()
+
+    let proof = await RecursiveProgram.baseCase(publicInput)
+
+    console.log("0", proof.publicInput.user1Balance, proof.publicInput.user2Balance)
+
+    
+    publicInput.transferFrom1to2 = Field(20)
+    proof = await RecursiveProgram.step(publicInput, proof)
+
+    console.log("1", proof.publicInput)
+
+    publicInput.transferFrom1to2 = Field(5)
+    proof = await RecursiveProgram.step(publicInput, proof)
+
+    console.log("2", proof.publicInput)
+
+    publicInput.transferFrom1to2 = Field(2)
+    proof = await RecursiveProgram.step(publicInput, proof)
+
+    console.log("3", proof.publicInput)
+
+
+    publicInput.transferFrom1to2 = Field(1)
+    proof = await RecursiveProgram.step(publicInput, proof)
+
+    console.log("4", proof.publicInput)
+
+
+    // post proof for user1
+    const txn2 = await Mina.transaction(deployerAccount, () => {
+      AccountUpdate.fundNewAccount(deployerAccount);
+      zkApp.postProof(
+        tokenAddress,
+        userAddress,
+        publicInput.balance1Witness,
+        publicInput.user1Balance,
+        proof
+      );
+    });
+    await txn2.prove();
+    await txn2.sign([deployerKey, userAddressPrivate, user2AddressPrivate]).send();
+
+    // update the merkle map to reflect the deduction in user1's balance
+    balanceMerkeleMap.set(zkApp.serializeBalancekKey(userAddress, tokenAddress), Field(100 - 28));
+    expect(zkApp.balanceMerkleMapRoot.get()).toEqual(balanceMerkeleMap.getRoot());
+
+    // post proof for user 2
+
   });
 });
