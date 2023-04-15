@@ -1,5 +1,6 @@
 # State Channels using Recursive ZK-Snark proofs
-[alt text](https://github.com/ycryptx/recursive-zk-lightning-network/blob/main/Screen%20Shot%202023-04-16%20at%205.30.44%20AM.png)
+<img src="https://github.com/ycryptx/recursive-zk-lightning-network/blob/main/Screen%20Shot%202023-04-16%20at%205.30.44%20AM.png"></img>
+
 This is a demo project (my submission for Eth-Tokyo) demonstrating creating a state channel between 2 people using recursive ZK Proofs.
 This project is built with SnarkyJS and is deployed to Mina's Berkeley testnet. 
 
