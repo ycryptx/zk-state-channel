@@ -71,6 +71,8 @@ export const RecursiveProgram = Experimental.ZkProgram({
   },
 });
 
+RecursiveProgram.compile()
+
 export class RecursiveProof extends Experimental.ZkProgram.Proof(RecursiveProgram) {}
 
 export class Lightning extends SmartContract {
@@ -220,6 +222,7 @@ export class Lightning extends SmartContract {
       this.serializeBalancekKey(userAddress, tokenAddress), "deposit balance keys not equal"
     );
 
+    this.network.blockchainLength.assertEquals(this.network.blockchainLength.get())
     timeLock.assertLessThan(Field.fromFields(this.network.blockchainLength.get().toFields()), "cannot withdraw before time lock period ends")
     
     // send the tokens to the user

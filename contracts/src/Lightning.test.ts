@@ -1,4 +1,4 @@
-import { Lightning, RecursiveProgram, RecursivePublicInput } from './Lightning';
+import { Lightning, RecursiveProgram } from './Lightning';
 import { ExampleToken } from './Token';
 import {
   isReady,

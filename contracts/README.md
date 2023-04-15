@@ -21,6 +21,11 @@ So long as none of you reach a balance of 0, you can transact between each other
 
 When you are ready to close your position, you can call the on-chain function `Lightning.withdraw()`, and the final token balance will be sent to your on-chain account.
 
+
+## Mined block where the contract was deployed
+
+https://berkeley.minaexplorer.com/transaction/5Ju2HJ7jJ6RtJxqYW4dJP15imCGVE9qNNhryGJRkLpbPGWQKXXiD
+
 ## How to build
 
 ```sh
