@@ -65,6 +65,9 @@ export const RecursiveProgram = Experimental.ZkProgram({
         earlierProof.publicInput.user1Balance.sub(publicInput.transferFrom1to2)
         earlierProof.publicInput.user2Balance.add(publicInput.transferFrom1to2)
 
+        console.log("earlierProof.publicInput.user1Balance", earlierProof.publicInput.user1Balance)
+        console.log("earlierProof.publicInput.user2Balance", earlierProof.publicInput.user2Balance)
+
         // assert balances are greater than 0
         earlierProof.publicInput.user1Balance.assertGreaterThanOrEqual(0, "user1 balance cannot be < 0 due to this transfer")
         earlierProof.publicInput.user2Balance.assertGreaterThanOrEqual(0, "user2 balance cannot be < 0 due to this transfer")
