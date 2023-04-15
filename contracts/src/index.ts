@@ -1,3 +1,3 @@
-import { Add } from './Add.js';
+import { ExampleToken } from './Token';
 
-export { Add };
+export { ExampleToken };
