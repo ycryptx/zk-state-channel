@@ -289,23 +289,22 @@ describe('Lightning', () => {
 
     // post proof for user1
     const txn2 = await Mina.transaction(deployerAccount, () => {
-      AccountUpdate.fundNewAccount(deployerAccount);
+      // AccountUpdate.fundNewAccount(deployerAccount);
+      // AccountUpdate.fundNewAccount(deployerAccount);
       zkApp.postProof(
         tokenAddress,
         userAddress,
         publicInput.balance1Witness,
-        publicInput.user1Balance,
+        Field(100),
         proof2
       );
     });
     await txn2.prove();
-    await txn2.sign([deployerKey, userAddressPrivate]).send();
+    await txn2.sign([deployerKey]).send();
 
     // update the merkle map to reflect the deduction in user1's balance
     balanceMerkeleMap.set(zkApp.serializeBalancekKey(userAddress, tokenAddress), Field(100 - 25));
     expect(zkApp.balanceMerkleMapRoot.get()).toEqual(balanceMerkeleMap.getRoot());
-
-    // post proof for user 2
 
   });
 });
