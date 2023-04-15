@@ -29,6 +29,9 @@ would enable trading between more people as liquidity would be less fragmented.
 Also, the protocol does not gracefully handle when users are trading simultenously with different users. A better MerkleMap and locking logic can be implemented 
 to enable this safely.
 
+Lastly, I wasn't able to get to actually implementing the frontend I wanted... I basically ran out of time ;(
+Still, I hope you enjoy the smart contract code!
+
 ## Important files to check out
 
 Lightning Smart Contract [here](./contracts/src/Lightning.ts)
