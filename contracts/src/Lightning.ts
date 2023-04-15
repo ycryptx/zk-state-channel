@@ -61,13 +61,12 @@ export const RecursiveProgram = Experimental.ZkProgram({
       method(publicInput: RecursivePublicInput, earlierProof: SelfProof<RecursivePublicInput>) {
         // verify earlier proof
         earlierProof.verify();
-
-        earlierProof.publicInput.user1Balance.sub(publicInput.transferFrom1to2)
-        earlierProof.publicInput.user2Balance.add(publicInput.transferFrom1to2)
-
         // assert balances are >= 0 for both parties
-        earlierProof.publicInput.user1Balance.assertGreaterThanOrEqual(0, "user1 balance cannot be < 0 due to this transfer")
-        earlierProof.publicInput.user2Balance.assertGreaterThanOrEqual(0, "user2 balance cannot be < 0 due to this transfer")
+        publicInput.user1Balance.assertGreaterThanOrEqual(0, "user1 balance cannot be < 0 due to this transfer")
+        publicInput.user2Balance.assertGreaterThanOrEqual(0, "user2 balance cannot be < 0 due to this transfer")
+
+        earlierProof.publicInput.user1Balance.sub(publicInput.transferFrom1to2).assertEquals(publicInput.user1Balance, "user1 balance is not correct")
+        earlierProof.publicInput.user2Balance.add(publicInput.transferFrom1to2).assertEquals(publicInput.user2Balance, "user2 balance is not correct")
       },
     },
   },
