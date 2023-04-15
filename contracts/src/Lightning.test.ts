@@ -289,8 +289,6 @@ describe('Lightning', () => {
 
     // post proof for user1
     const txn2 = await Mina.transaction(deployerAccount, () => {
-      // AccountUpdate.fundNewAccount(deployerAccount);
-      // AccountUpdate.fundNewAccount(deployerAccount);
       zkApp.postProof(
         tokenAddress,
         userAddress,
