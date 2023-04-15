@@ -35,7 +35,7 @@ Lightning Smart Contract [here](./contracts/src/Lightning.ts)
 
 Lightning Smart Contract tests [here](./contracts/src/Lightning.test.ts)
 
-Technical Documentation [here](./contracts/src/README.md)
+Technical Documentation [here](./contracts/README.md)
 
 ## Thanks to...
 
