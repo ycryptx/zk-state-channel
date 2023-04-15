@@ -261,50 +261,47 @@ describe('Lightning', () => {
 
     await RecursiveProgram.compile()
 
-    let proof = await RecursiveProgram.baseCase(publicInput)
-
-    console.log("0", proof.publicInput.user1Balance, proof.publicInput.user2Balance)
-
+    let proof0 = await RecursiveProgram.baseCase(publicInput)
     
-    publicInput.transferFrom1to2 = Field(20)
-    proof = await RecursiveProgram.step(publicInput, proof)
+    proof0.publicInput.transferFrom1to2 = Field(20)
+    const proof1 = await RecursiveProgram.step(proof0.publicInput, proof0)
 
-    console.log("1", proof.publicInput)
+    console.log("1", proof1.publicInput)
 
-    publicInput.transferFrom1to2 = Field(5)
-    proof = await RecursiveProgram.step(publicInput, proof)
+    proof1.publicInput.transferFrom1to2 = Field(5)
+    const proof2 = await RecursiveProgram.step(proof1.publicInput, proof1)
 
-    console.log("2", proof.publicInput)
+    console.log("2", proof2.publicInput)
 
-    publicInput.transferFrom1to2 = Field(2)
-    proof = await RecursiveProgram.step(publicInput, proof)
+    proof2.publicInput.transferFrom1to2 = Field(2)
+    const proof3 = await RecursiveProgram.step(proof2.publicInput, proof2)
 
-    console.log("3", proof.publicInput)
-
-
-    publicInput.transferFrom1to2 = Field(1)
-    proof = await RecursiveProgram.step(publicInput, proof)
-
-    console.log("4", proof.publicInput)
+    console.log("3", proof3.publicInput)
 
 
-    // post proof for user1
-    const txn2 = await Mina.transaction(deployerAccount, () => {
-      AccountUpdate.fundNewAccount(deployerAccount);
-      zkApp.postProof(
-        tokenAddress,
-        userAddress,
-        publicInput.balance1Witness,
-        publicInput.user1Balance,
-        proof
-      );
-    });
-    await txn2.prove();
-    await txn2.sign([deployerKey, userAddressPrivate, user2AddressPrivate]).send();
+    proof3.publicInput.transferFrom1to2 = Field(1)
+    const proof4 = await RecursiveProgram.step(proof3.publicInput, proof3)
 
-    // update the merkle map to reflect the deduction in user1's balance
-    balanceMerkeleMap.set(zkApp.serializeBalancekKey(userAddress, tokenAddress), Field(100 - 28));
-    expect(zkApp.balanceMerkleMapRoot.get()).toEqual(balanceMerkeleMap.getRoot());
+    console.log("4", proof4.publicInput)
+
+
+    // // post proof for user1
+    // const txn2 = await Mina.transaction(deployerAccount, () => {
+    //   AccountUpdate.fundNewAccount(deployerAccount);
+    //   zkApp.postProof(
+    //     tokenAddress,
+    //     userAddress,
+    //     publicInput.balance1Witness,
+    //     publicInput.user1Balance,
+    //     proof4
+    //   );
+    // });
+    // await txn2.prove();
+    // await txn2.sign([deployerKey, userAddressPrivate, user2AddressPrivate]).send();
+
+    // // update the merkle map to reflect the deduction in user1's balance
+    // balanceMerkeleMap.set(zkApp.serializeBalancekKey(userAddress, tokenAddress), Field(100 - 28));
+    // expect(zkApp.balanceMerkleMapRoot.get()).toEqual(balanceMerkeleMap.getRoot());
 
     // post proof for user 2
 

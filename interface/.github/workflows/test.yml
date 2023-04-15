@@ -1,0 +1,137 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  # manual trigger
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup
+      - run: yarn lint
+  
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup
+      - run: yarn prepare
+      - run: yarn typecheck
+
+  deps-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup
+      - run: yarn yarn-deduplicate --strategy=highest --list --fail
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup
+      - run: yarn prepare
+      - run: yarn test
+      - uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          verbose: true
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup
+      - run: yarn prepare
+      - run: yarn build
+      - uses: actions/upload-artifact@v2
+        with:
+          name: build
+          path: build
+          if-no-files-found: error
+
+  size-tests:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v2
+        with:
+          name: build
+          path: build
+      - run: yarn test:size
+
+
+  cypress-build:
+    runs-on: ubuntu-latest
+    container: cypress/browsers:node-18.14.1-chrome-111.0.5563.64-1-ff-111.0-edge-111.0.1661.43-1
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup
+      - uses: actions/cache@v3
+        id: cypress-cache
+        with:
+          path: /root/.cache/Cypress
+          key: ${{ runner.os }}-cypress-${{ hashFiles('yarn.lock') }}
+      - if: steps.cypress-cache.outputs.cache-hit != 'true'
+        run: |
+          yarn cypress install
+          yarn cypress info
+
+  cypress-test-matrix:
+    needs: [build, cypress-build]
+    runs-on: ubuntu-latest
+    container: cypress/browsers:node-18.14.1-chrome-111.0.5563.64-1-ff-111.0-edge-111.0.1661.43-1
+    strategy:
+      fail-fast: false
+      matrix:
+        containers: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v2
+        with:
+          name: build
+          path: build
+      - uses: actions/cache@v3
+        id: cypress-cache
+        with:
+          path: /root/.cache/Cypress
+          key: ${{ runner.os }}-cypress-${{ hashFiles('yarn.lock') }}
+      - if: steps.cypress-cache.outputs.cache-hit != 'true'
+        run: yarn cypress install
+
+      - uses: cypress-io/github-action@v4
+        with:
+          install: false
+          start: yarn serve
+          wait-on: 'http://localhost:3000'
+          browser: chrome
+          record: true
+          parallel: true
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          verbose: true
+
+  # Included as a single job to check for cypress-test-matrix success, as a matrix cannot be checked.
+  cypress-tests:
+    if: ${{ always() }}
+    needs: [cypress-test-matrix]
+    runs-on: ubuntu-latest
+    steps:
+      - if: needs.cypress-test-matrix.result != 'success'
+        run: exit 1
