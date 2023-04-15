@@ -8,6 +8,19 @@ of recursive ZK-Snarks. Only at the end, a single transaction can be submitted o
 
 This helps to significantly reduce the cost of fees. Now, a potentially unlimited number of transactions can be compressed into a single one!
 
+
+## How to use the Lightning Protocol
+
+First deposit tokens into the Lightning Smart Contract by calling the on-chain function `Lightning.deposit()`
+
+Then, pick a person you want to trade with who has already onboarded to the protocol, and generate a 
+recursive ZK-Snarks proof off-chain by calling `Lightning.RecursiveProgram.baseCase()` and then `Lightning.RecursiveProgram.step()` to make your first trade. 
+You can send that proof directly to the person you send tokens to (like over RPC), and that person can use that proof to send you money back.
+
+So long as none of you reach a balance of 0, you can transact between each other *forever*, at *no cost*!!!
+
+When you are ready to close your position, you can call the on-chain function `Lightning.withdraw()`, and the final token balance will be sent to your on-chain account.
+
 ## How to build
 
 ```sh
@@ -21,11 +34,8 @@ npm run test
 npm run testw # watch mode
 ```
 
-## How to run coverage
-
-```sh
-npm run coverage
-```
+## Author
+Yonatan Medina
 
 ## License
 

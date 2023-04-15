@@ -1,11 +1,11 @@
 {
   "version": 1,
   "deployAliases": {
-    "recursive": {
+    "lightning": {
       "url": "https://proxy.berkeley.minaexplorer.com/graphql",
-      "keyPath": "keys/recursive.json",
+      "keyPath": "keys/lightning.json",
       "fee": "0.1",
-      "smartContract": "Add"
+      "smartContract": "Lightning"
     }
   }
 }

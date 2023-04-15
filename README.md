@@ -32,7 +32,10 @@ to enable this safely.
 ## Important files to check out
 
 Lightning Smart Contract [here](./contracts/src/Lightning.ts)
+
 Lightning Smart Contract tests [here](./contracts/src/Lightning.test.ts)
+
+Technical Documentation [here](./contracts/src/README.md)
 
 ## Thanks to...
 

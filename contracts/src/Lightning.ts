@@ -15,8 +15,7 @@ import {
   Struct,
   Circuit
 } from 'snarkyjs';
-import { ExampleToken } from './Token';
-
+import { ExampleToken } from './Token.js';
 
 export class RecursivePublicInput extends Struct({
   user1: PublicKey,
@@ -129,20 +128,20 @@ export class Lightning extends SmartContract {
     // deposit tokens from the user to this contract
     token.sendTokens(userAddress, this.address, tokenAmount);
 
-    // check if there are time locked
+    // get state roots
     const timeLockRoot = this.timeLockMerkleMapRoot.get();
     this.timeLockMerkleMapRoot.assertEquals(timeLockRoot);
 
     const balanceRoot = this.balanceMerkleMapRoot.get();
     this.balanceMerkleMapRoot.assertEquals(balanceRoot);
 
+    // verify witnesses
     const [timeLockRootBefore, timeLockKey] =
       timeLockPath.computeRootAndKey(timeLockBefore);
     timeLockRootBefore.assertEquals(timeLockRoot, "deposit time lock root not equal");
     timeLockKey.assertEquals(
       this.serializeTimeLockKey(userAddress, tokenAddress), "deposit time lock keys not equal"
     );
-
     const [balanceRootBefore, balanceKey] =
       balancePath.computeRootAndKey(balanceBefore);
     balanceRootBefore.assertEquals(balanceRoot, "deposit balance root not equal");
@@ -194,11 +193,48 @@ export class Lightning extends SmartContract {
 
   @method withdraw(
     tokenAddress: PublicKey,
-    userAddress: PublicKey
+    userAddress: PublicKey,
+    timeLockWitness: MerkleMapWitness,
+    balanceWitness: MerkleMapWitness,
+    timeLock: Field,
+    balance: Field
   ) {
-    // TODO: verify time lock
+    // get state roots
+    const timeLockRoot = this.timeLockMerkleMapRoot.get();
+    this.timeLockMerkleMapRoot.assertEquals(timeLockRoot);
+
+    const balanceRoot = this.balanceMerkleMapRoot.get();
+    this.balanceMerkleMapRoot.assertEquals(balanceRoot);
+
+    // verify witnesses
+    const [timeLockRootBefore, timeLockKey] =
+    timeLockWitness.computeRootAndKey(timeLock);
+    timeLockRootBefore.assertEquals(timeLockRoot, "withdraw time lock  is wrong");
+    timeLockKey.assertEquals(
+      this.serializeTimeLockKey(userAddress, tokenAddress), "wirthdraw time lock keys not equal"
+    );
+    const [balanceRootBefore, balanceKey] =
+      balanceWitness.computeRootAndKey(balance);
+    balanceRootBefore.assertEquals(balanceRoot, "deposit balance root not equal");
+    balanceKey.assertEquals(
+      this.serializeBalancekKey(userAddress, tokenAddress), "deposit balance keys not equal"
+    );
+
+    timeLock.assertLessThan(Field.fromFields(this.network.blockchainLength.get().toFields()), "cannot withdraw before time lock period ends")
+    
+    // send the tokens to the user
     const token = new ExampleToken(tokenAddress);
-    // TODO: send balance to userAddress
+    token.sendTokens(this.address, userAddress, UInt64.from(balance))
+
+    // reset state for that user
+    const [newBalanceRoot] = balanceWitness.computeRootAndKey(
+      Field(0)
+    );
+    const [newTimeLockRoot] = timeLockWitness.computeRootAndKey(
+      Field(0)
+    );
+    this.balanceMerkleMapRoot.set(newBalanceRoot);
+    this.timeLockMerkleMapRoot.set(newTimeLockRoot);
   }
 
   @method serializeTimeLockKey(

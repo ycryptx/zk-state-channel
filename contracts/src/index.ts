@@ -1,4 +1,4 @@
 import { ExampleToken } from './Token';
-import { Lightning } from './Lightning';
+import { Lightning, RecursivePublicInput, RecursiveProgram, RecursiveProof } from './Lightning';
 
-export { ExampleToken, Lightning };
+export { ExampleToken, Lightning, RecursivePublicInput, RecursiveProgram, RecursiveProof  };
