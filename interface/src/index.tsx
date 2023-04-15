@@ -2,7 +2,7 @@ import '@reach/dialog/styles.css'
 import 'inter-ui'
 import 'polyfills'
 import 'tracing'
-import './reactCOIServiceWorker';
+import './reactCOIServiceWorker'
 
 import { ApolloProvider } from '@apollo/client'
 import { FeatureFlagsProvider } from 'featureFlags'

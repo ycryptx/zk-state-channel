@@ -259,7 +259,7 @@ describe('Lightning', () => {
       transferFrom1to2: Field(0)
     }
 
-    await RecursiveProgram.compile()
+    const { verificationKey } = await RecursiveProgram.compile()
 
     let proof0 = await RecursiveProgram.baseCase(publicInput)
     

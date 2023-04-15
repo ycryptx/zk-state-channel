@@ -28,6 +28,11 @@ would enable trading between more people as liquidity would be less fragmented.
 Also, the protocol does not gracefully handle when users are trading simultenously with different users. A better MerkleMap and locking logic can be implemented 
 to enable this safely.
 
+## Important files to check out
+
+Lightning Smart Contract [here](./contracts/src/Lightning.ts)
+Lightning Smart Contract tests [here](./contracts/src/Lightning.test.ts)
+
 ## Thanks to...
 
 Agnus, Trivio, and the rest of the Mina team for their help!
