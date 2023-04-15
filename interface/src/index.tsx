@@ -28,6 +28,12 @@ import TransactionUpdater from './state/transactions/updater'
 import ThemeProvider, { ThemedGlobalStyle } from './theme'
 import RadialGradientByChainUpdater from './theme/components/RadialGradientByChainUpdater'
 
+declare global {
+  interface Window { mina: any; }
+}
+
+window.mina = window.mina || {};
+
 if (window.ethereum) {
   window.ethereum.autoRefreshOnNetworkChange = false
 }

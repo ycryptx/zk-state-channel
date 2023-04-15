@@ -3,12 +3,10 @@ import { Connector } from '@web3-react/types'
 import { isSupportedChain } from 'constants/chains'
 import { RPC_PROVIDERS } from 'constants/providers'
 import { TraceJsonRpcVariant, useTraceJsonRpcFlag } from 'featureFlags/flags/traceJsonRpc'
-import useEagerlyConnect from 'hooks/useEagerlyConnect'
 import useOrderedConnections from 'hooks/useOrderedConnections'
 import { ReactNode, useEffect, useMemo } from 'react'
 
 export default function Web3Provider({ children }: { children: ReactNode }) {
-  useEagerlyConnect()
   const connections = useOrderedConnections()
   const connectors: [Connector, Web3ReactHooks][] = connections.map(({ hooks, connector }) => [connector, hooks])
 

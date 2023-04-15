@@ -1,6 +1,5 @@
 import { useWeb3React } from '@web3-react/core'
 import UniwalletModal from 'components/AccountDrawer/UniwalletModal'
-import UniswapWalletBanner from 'components/Banner/UniswapWalletBanner'
 import AddressClaimModal from 'components/claim/AddressClaimModal'
 import ConnectedAccountBlocked from 'components/ConnectedAccountBlocked'
 import FiatOnrampModal from 'components/FiatOnrampModal'
@@ -13,6 +12,7 @@ const Bag = lazy(() => import('nft/components/bag/Bag'))
 const TransactionCompleteModal = lazy(() => import('nft/components/collection/TransactionCompleteModal'))
 const AirdropModal = lazy(() => import('components/AirdropModal'))
 
+// eslint-disable-next-line import/no-unused-modules
 export default function TopLevelModals() {
   const addressClaimOpen = useModalIsOpen(ApplicationModal.ADDRESS_CLAIM)
   const addressClaimToggle = useToggleModal(ApplicationModal.ADDRESS_CLAIM)
@@ -27,7 +27,6 @@ export default function TopLevelModals() {
       <ConnectedAccountBlocked account={account} isOpen={accountBlocked} />
       <Bag />
       <UniwalletModal />
-      <UniswapWalletBanner />
       <TransactionCompleteModal />
       <AirdropModal />
       <FiatOnrampModal />
