@@ -1,4 +1,5 @@
 import { Lightning } from './Lightning';
+import { ExampleToken } from './Token';
 import {
   isReady,
   shutdown,
@@ -9,6 +10,8 @@ import {
   UInt64,
   Signature,
   Field,
+  Poseidon,
+  MerkleMap,
 } from 'snarkyjs';
 
 /*
@@ -27,8 +30,13 @@ describe('Lightning', () => {
     senderKey: PrivateKey,
     zkAppAddress: PublicKey,
     zkAppPrivateKey: PrivateKey,
+    tokenPrivateKey: PrivateKey,
+    tokenAddress: PublicKey,
+    tokenApp: ExampleToken,
     zkApp: Lightning,
-    amount100: UInt64;
+    amount100: UInt64,
+    timeLockMerkleMap: MerkleMap,
+    balanceMerkeleMap: MerkleMap;
 
   beforeAll(async () => {
     await isReady;
@@ -46,6 +54,13 @@ describe('Lightning', () => {
     zkAppPrivateKey = PrivateKey.random();
     zkAppAddress = zkAppPrivateKey.toPublicKey();
     zkApp = new Lightning(zkAppAddress);
+    timeLockMerkleMap = new MerkleMap();
+    balanceMerkeleMap = new MerkleMap();
+
+    // init token contract
+    tokenPrivateKey = PrivateKey.random();
+    tokenAddress = tokenPrivateKey.toPublicKey();
+    tokenApp = new ExampleToken(tokenAddress);
   });
 
   afterAll(() => {
@@ -59,28 +74,85 @@ describe('Lightning', () => {
     const txn = await Mina.transaction(deployerAccount, () => {
       AccountUpdate.fundNewAccount(deployerAccount);
       zkApp.deploy();
+      zkApp.initState(timeLockMerkleMap.getRoot(), balanceMerkeleMap.getRoot());
+      AccountUpdate.fundNewAccount(deployerAccount);
+      tokenApp.deploy();
     });
     await txn.prove();
-    // this tx needs .sign(), because `deploy()` adds an account update that requires signature authorization
-    await txn.sign([deployerKey, zkAppPrivateKey]).send();
+    await txn.sign([deployerKey, zkAppPrivateKey, tokenPrivateKey]).send();
   }
 
-  // TODO: deserialization currently not working
-  it.skip('correctly serializes timeLockMerkleRoot key', async () => {
+  it('correctly serializes timeLockMerkleRoot key', async () => {
     await localDeploy();
 
     const userAddress = PrivateKey.random().toPublicKey();
     const tokenAddress = PrivateKey.random().toPublicKey();
 
-    const serializedKey = zkApp.serializeTimeLockKey(userAddress, tokenAddress);
-    expect(serializedKey).toEqual(
-      `${userAddress.toBase58()}@${tokenAddress.toBase58()}`
+    expect(zkApp.serializeTimeLockKey(userAddress, tokenAddress)).toEqual(
+      Poseidon.hash([
+        ...userAddress.toFields(),
+        ...tokenAddress.toFields(),
+        Field(0),
+      ])
     );
+    expect(zkApp.serializeBalancekKey(userAddress, tokenAddress)).toEqual(
+      Poseidon.hash([
+        ...userAddress.toFields(),
+        ...tokenAddress.toFields(),
+        Field(1),
+      ])
+    );
+  });
 
-    const desirializedKey = zkApp.desirealizeTimeLockKey(Field(serializedKey));
-    expect(desirializedKey).toMatchObject({
-      userAddress,
-      tokenAddress,
+  it('initial deposit', async () => {
+    await localDeploy();
+
+    const userAddressPrivate = PrivateKey.random();
+    const userAddress = userAddressPrivate.toPublicKey();
+
+    expect(tokenApp.totalAmountInCirculation.get()).toEqual(UInt64.from(0));
+
+    // mint
+    const txn = await Mina.transaction(deployerAccount, () => {
+      AccountUpdate.fundNewAccount(deployerAccount);
+      tokenApp.mint(
+        userAddress,
+        amount100,
+        Signature.create(tokenPrivateKey, [
+          ...amount100.toFields(),
+          ...userAddress.toFields(),
+        ])
+      );
     });
+    await txn.prove();
+    await txn.sign([deployerKey]).send();
+    expect(Mina.getBalance(userAddress, tokenApp.token.id)).toEqual(amount100);
+    //
+
+    // deposit
+    const timeLockWitness = timeLockMerkleMap.getWitness(
+      zkApp.serializeTimeLockKey(userAddress, tokenAddress)
+    );
+    const balanceWitness = balanceMerkeleMap.getWitness(
+      zkApp.serializeBalancekKey(userAddress, tokenAddress)
+    );
+    const txn1 = await Mina.transaction(deployerAccount, () => {
+      AccountUpdate.fundNewAccount(deployerAccount);
+      zkApp.deposit(
+        userAddress,
+        tokenAddress,
+        amount100,
+        Field(0),
+        Field(0),
+        timeLockWitness,
+        balanceWitness
+      );
+    });
+    await txn1.prove();
+    await txn1.sign([deployerKey, userAddressPrivate]).send();
+
+    expect(Mina.getBalance(userAddress, tokenApp.token.id)).toEqual(
+      UInt64.from(0)
+    );
   });
 });
