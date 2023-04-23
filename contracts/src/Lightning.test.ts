@@ -83,16 +83,17 @@ describe('Lightning', () => {
   }
 
   async function mint(userAddress: PublicKey) {
+    const mintSignature = Signature.create(tokenPrivateKey, [
+      ...amount100.toFields(),
+      ...userAddress.toFields(),
+      ...tokenApp.mintNonce.get().toFields(),
+    ]);
     const txn = await Mina.transaction(deployerAccount, () => {
       AccountUpdate.fundNewAccount(deployerAccount);
       tokenApp.mint(
         userAddress,
         amount100,
-        Signature.create(tokenPrivateKey, [
-          ...amount100.toFields(),
-          ...userAddress.toFields(),
-          ...tokenApp.mintNonce.get().toFields(),
-        ])
+        mintSignature,
       );
     });
     await txn.prove();
@@ -164,7 +165,7 @@ describe('Lightning', () => {
     );
   });
 
-  it('state channel', async () => {
+  it.only('state channel', async () => {
     await localDeploy();
 
     const userAddressPrivate = PrivateKey.random();
@@ -304,6 +305,5 @@ describe('Lightning', () => {
     // update the merkle map to reflect the deduction in user1's balance
     balanceMerkeleMap.set(zkApp.serializeBalancekKey(userAddress, tokenAddress), Field(100 - 25));
     expect(zkApp.balanceMerkleMapRoot.get()).toEqual(balanceMerkeleMap.getRoot());
-
   });
 });

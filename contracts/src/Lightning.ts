@@ -71,8 +71,6 @@ export const RecursiveProgram = Experimental.ZkProgram({
   },
 });
 
-RecursiveProgram.compile()
-
 export class RecursiveProof extends Experimental.ZkProgram.Proof(RecursiveProgram) {}
 
 export class Lightning extends SmartContract {
