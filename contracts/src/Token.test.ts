@@ -74,6 +74,7 @@ describe('ExampleToken', () => {
     const mintSignature = Signature.create(zkAppPrivateKey, [
       ...amount100.toFields(),
       ...mintToAddress.toFields(),
+      ...zkApp.account.nonce.get().toFields(),
     ]);
 
     expect(zkApp.totalAmountInCirculation.get()).toEqual(UInt64.from(0));
@@ -85,10 +86,15 @@ describe('ExampleToken', () => {
     });
     await txn.prove();
     await txn.sign([deployerKey]).send();
+    const txn2 = await Mina.transaction(deployerAccount, () => {
+      zkApp.mint(mintToAddress, amount100, mintSignature);
+    });
+    await txn2.prove();
+    await txn2.sign([deployerKey]).send();
 
-    expect(zkApp.totalAmountInCirculation.get()).toEqual(amount100);
+    expect(zkApp.totalAmountInCirculation.get()).toEqual(amount100.mul(2));
 
-    expect(Mina.getBalance(mintToAddress, zkApp.token.id)).toEqual(amount100);
+    expect(Mina.getBalance(mintToAddress, zkApp.token.id)).toEqual(amount100.mul(2));
   });
 
   it('fails to send tokens when no balance', async () => {
@@ -114,6 +120,7 @@ describe('ExampleToken', () => {
     const mintSignature = Signature.create(zkAppPrivateKey, [
       ...amount100.toFields(),
       ...deployerAccount.toFields(),
+      ...zkApp.account.nonce.get().toFields(),
     ]);
 
     // successful send

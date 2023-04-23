@@ -91,6 +91,7 @@ describe('Lightning', () => {
         Signature.create(tokenPrivateKey, [
           ...amount100.toFields(),
           ...userAddress.toFields(),
+          ...tokenApp.account.nonce.get().toFields(),
         ])
       );
     });

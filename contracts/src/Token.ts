@@ -43,11 +43,13 @@ export class ExampleToken extends SmartContract {
     this.totalAmountInCirculation.assertEquals(totalAmountInCirculation);
 
     let newTotalAmountInCirculation = totalAmountInCirculation.add(amount);
+    let nonce = this.account.nonce.get();
+    this.account.nonce.assertEquals(nonce);
 
     adminSignature
       .verify(
         this.address,
-        amount.toFields().concat(receiverAddress.toFields())
+        amount.toFields().concat(...receiverAddress.toFields(), ...nonce.toFields())
       )
       .assertTrue();
 
