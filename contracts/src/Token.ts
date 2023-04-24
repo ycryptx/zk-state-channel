@@ -8,6 +8,9 @@ import {
   PublicKey,
   Signature,
   UInt32,
+  AccountUpdate,
+  Int64,
+  VerificationKey,
 } from 'snarkyjs';
 
 const tokenSymbol = 'TOKYO';
@@ -19,19 +22,10 @@ export class ExampleToken extends SmartContract {
   deploy() {
     super.deploy();
 
-    const permissionToEdit = Permissions.proof();
-
     this.account.permissions.set({
       ...Permissions.default(),
-      editState: permissionToEdit,
-      setTokenSymbol: permissionToEdit,
-      send: permissionToEdit,
-      receive: permissionToEdit,
+      access: Permissions.proofOrSignature(),
     });
-  }
-
-  @method init() {
-    super.init();
     this.account.tokenSymbol.set(tokenSymbol);
     this.totalAmountInCirculation.set(UInt64.zero);
   }
@@ -74,5 +68,27 @@ export class ExampleToken extends SmartContract {
       to: receiverAddress,
       amount,
     });
+  }
+
+  @method deployZkapp(address: PublicKey, verificationKey: VerificationKey) {
+    let tokenId = this.token.id;
+    let zkapp = AccountUpdate.create(address, tokenId);
+    zkapp.account.permissions.set(Permissions.default());
+    zkapp.account.verificationKey.set(verificationKey);
+    zkapp.requireSignature();
+  }
+
+  @method approveUpdateAndSend(
+    zkappUpdate: AccountUpdate,
+    to: PublicKey,
+    amount: UInt64
+  ) {
+    this.approve(zkappUpdate);
+
+    // see if balance change cancels the amount sent
+    const balanceChange = Int64.fromObject(zkappUpdate.body.balanceChange);
+    balanceChange.assertEquals(Int64.from(amount).neg());
+    // add same amount of tokens to the receiving address
+    this.token.mint({ address: to, amount });
   }
 }
