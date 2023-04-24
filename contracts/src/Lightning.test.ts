@@ -165,7 +165,7 @@ describe('Lightning', () => {
     );
   });
 
-  it.only('state channel', async () => {
+  it('state channel', async () => {
     await localDeploy();
 
     const userAddressPrivate = PrivateKey.random();
