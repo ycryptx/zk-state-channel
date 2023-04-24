@@ -15,7 +15,6 @@ import {
   Struct,
   Circuit,
   Signature,
-  AccountUpdate
 } from 'snarkyjs';
 import { ExampleToken } from './Token.js';
 
@@ -200,7 +199,7 @@ export class Lightning extends SmartContract {
     this.balanceMerkleMapRoot.set(newBalanceRoot);
   }
 
-  @method validateWithdrawAndNullify(
+  @method withdraw(
     tokenAddress: PublicKey,
     userAddress: PublicKey,
     timeLockWitness: MerkleMapWitness,
@@ -232,6 +231,12 @@ export class Lightning extends SmartContract {
     this.network.blockchainLength.assertEquals(this.network.blockchainLength.get())
     timeLock.assertLessThan(Field.fromFields(this.network.blockchainLength.get().toFields()), "cannot withdraw before time lock period ends")
 
+    // send the tokens to the user
+    const token = new ExampleToken(tokenAddress);
+    const holder = new LightningTokenHoder(this.address, token.token.id);
+    holder.prepareWithdraw(balance);
+    token.approveUpdateAndSend(holder.self, userAddress, UInt64.from(balance));
+
     // reset state for that user
     const [newBalanceRoot] = balanceWitness.computeRootAndKey(
       Field(0)
@@ -241,24 +246,6 @@ export class Lightning extends SmartContract {
     );
     this.balanceMerkleMapRoot.set(newBalanceRoot);
     this.timeLockMerkleMapRoot.set(newTimeLockRoot);
-
-    // Require user's private key as it nullifies user's secure
-    AccountUpdate.create(userAddress).requireSignature();
-  }
-
-  @method withdraw(
-    tokenAddress: PublicKey,
-    userAddress: PublicKey,
-    timeLockWitness: MerkleMapWitness,
-    balanceWitness: MerkleMapWitness,
-    timeLock: Field,
-    balance: Field
-  ) {
-    const token = new ExampleToken(tokenAddress);
-    const holder = new LightningTokenHoder(this.address, token.token.id);
-    holder.prepareWithdraw(tokenAddress, userAddress, timeLockWitness, balanceWitness, timeLock, balance);
-    // send the tokens to the user
-    token.approveUpdateAndSend(holder.self, userAddress, UInt64.from(balance));
   }
 
   @method serializeTimeLockKey(
@@ -286,17 +273,10 @@ export class Lightning extends SmartContract {
 
 export class LightningTokenHoder extends SmartContract {
   @method prepareWithdraw(
-    tokenAddress: PublicKey,
-    userAddress: PublicKey,
-    timeLockWitness: MerkleMapWitness,
-    balanceWitness: MerkleMapWitness,
-    timeLock: Field,
     balance: Field
   ) {
-    const lightningChannel = new Lightning(this.address);
-    lightningChannel.validateWithdrawAndNullify(tokenAddress, userAddress, timeLockWitness, balanceWitness, timeLock, balance);
-    // be approved by the token owner parent
-    this.self.body.mayUseToken = AccountUpdate.MayUseToken.ParentsOwnToken;
+    // Restrict to be called from in the context of Lightning contract
+    this.self.parent?.parent?.publicKey.assertEquals(this.address);
     this.balance.subInPlace(UInt64.from(balance));
   }
 }

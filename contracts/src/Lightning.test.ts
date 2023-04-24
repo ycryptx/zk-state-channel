@@ -13,6 +13,7 @@ import {
   Field,
   Poseidon,
   MerkleMap,
+  Encoding,
 } from 'snarkyjs';
 
 /*
@@ -326,14 +327,15 @@ describe('Lightning', () => {
       );
     });
     await txn3.prove();
-    const signed = txn3.sign([deployerKey, userAddressPrivate]);
+    const signed = txn3.sign([deployerKey]);
     const legend = {
       [zkAppAddress.toBase58()]: 'lightningApp',
       [tokenAddress.toBase58()]: 'tokenApp',
       [deployerAccount.toBase58()]: 'deployer',
       [userAddress.toBase58()]: 'user',
+      [Encoding.TokenId.toBase58(tokenApp.token.id)]: 'TOKEN'
     }
-    saveTxn(txn3, 'txn3', legend, './txn3.png');
+    saveTxn(signed, 'txn3', legend, './txn3.png');
     await signed.send();
     expect(Mina.getBalance(userAddress, tokenApp.token.id)).toEqual(UInt64.from(100 - 25));
   });
