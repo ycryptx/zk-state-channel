@@ -74,6 +74,7 @@ describe('ExampleToken', () => {
     const mintSignature = Signature.create(zkAppPrivateKey, [
       ...amount100.toFields(),
       ...mintToAddress.toFields(),
+      ...zkApp.mintNonce.get().toFields(),
     ]);
 
     expect(zkApp.totalAmountInCirculation.get()).toEqual(UInt64.from(0));
@@ -85,6 +86,9 @@ describe('ExampleToken', () => {
     });
     await txn.prove();
     await txn.sign([deployerKey]).send();
+    await expect(Mina.transaction(deployerAccount, () => {
+      zkApp.mint(mintToAddress, amount100, mintSignature);
+    })).rejects.toThrow();
 
     expect(zkApp.totalAmountInCirculation.get()).toEqual(amount100);
 
@@ -114,6 +118,7 @@ describe('ExampleToken', () => {
     const mintSignature = Signature.create(zkAppPrivateKey, [
       ...amount100.toFields(),
       ...deployerAccount.toFields(),
+      ...zkApp.mintNonce.get().toFields(),
     ]);
 
     // successful send
