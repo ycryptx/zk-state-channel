@@ -1,5 +1,5 @@
 import { Lightning, LightningTokenHoder, RecursiveProgram, RecursivePublicInput } from './Lightning';
-import { saveTxn } from 'mina-transaction-visualizer';
+// import { saveTxn } from 'mina-transaction-visualizer';
 import { ExampleToken } from './Token';
 import {
   isReady,
@@ -328,14 +328,14 @@ describe('Lightning', () => {
     });
     await txn3.prove();
     const signed = txn3.sign([deployerKey]);
-    const legend = {
-      [zkAppAddress.toBase58()]: 'lightningApp',
-      [tokenAddress.toBase58()]: 'tokenApp',
-      [deployerAccount.toBase58()]: 'deployer',
-      [userAddress.toBase58()]: 'user',
-      [Encoding.TokenId.toBase58(tokenApp.token.id)]: 'TOKEN'
-    }
-    saveTxn(signed, 'txn3', legend, './txn3.png');
+    // const legend = {
+    //   [zkAppAddress.toBase58()]: 'lightningApp',
+    //   [tokenAddress.toBase58()]: 'tokenApp',
+    //   [deployerAccount.toBase58()]: 'deployer',
+    //   [userAddress.toBase58()]: 'user',
+    //   [Encoding.TokenId.toBase58(tokenApp.token.id)]: 'TOKEN'
+    // }
+    // saveTxn(signed, 'txn3', legend, './txn3.png');
     await signed.send();
     expect(Mina.getBalance(userAddress, tokenApp.token.id)).toEqual(UInt64.from(100 - 25));
   });
