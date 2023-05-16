@@ -19,6 +19,7 @@ jobs:
         uses: actions/checkout@v2
       - name: NPM ci, build, & test
         run: |
+          cd contracts
           npm install
           npm run build --if-present
           npm test
