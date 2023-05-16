@@ -42,6 +42,7 @@
     "lint-staged": "^11.0.1",
     "prettier": "^2.3.2",
     "ts-jest": "^27.0.7",
+    "mina-transaction-visualizer": "^0.1.0",
     "typescript": "^4.7.2"
   },
   "peerDependencies": {

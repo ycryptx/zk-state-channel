@@ -8,7 +8,6 @@ import {
   AccountUpdate,
   UInt64,
   Signature,
-  Field,
 } from 'snarkyjs';
 
 /*
@@ -23,8 +22,6 @@ let proofsEnabled = false;
 describe('ExampleToken', () => {
   let deployerAccount: PublicKey,
     deployerKey: PrivateKey,
-    senderAccount: PublicKey,
-    senderKey: PrivateKey,
     zkAppAddress: PublicKey,
     zkAppPrivateKey: PrivateKey,
     zkApp: ExampleToken,
@@ -41,8 +38,6 @@ describe('ExampleToken', () => {
     Mina.setActiveInstance(Local);
     ({ privateKey: deployerKey, publicKey: deployerAccount } =
       Local.testAccounts[0]);
-    ({ privateKey: senderKey, publicKey: senderAccount } =
-      Local.testAccounts[1]);
     zkAppPrivateKey = PrivateKey.random();
     zkAppAddress = zkAppPrivateKey.toPublicKey();
     zkApp = new ExampleToken(zkAppAddress);

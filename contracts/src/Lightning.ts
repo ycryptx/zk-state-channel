@@ -13,7 +13,8 @@ import {
   Poseidon,
   SelfProof,
   Struct,
-  Circuit
+  Circuit,
+  Signature,
 } from 'snarkyjs';
 import { ExampleToken } from './Token.js';
 
@@ -51,18 +52,25 @@ export const RecursiveProgram = Experimental.ZkProgram({
     },
 
     step: {
-      privateInputs: [SelfProof],
+      privateInputs: [SelfProof, Signature],
 
       /**
        * this method only cares about publicInput.transferFrom1To2
        * notice that transferFrom1To2 can be negative depending on who is transferring to who
        */
-      method(publicInput: RecursivePublicInput, earlierProof: SelfProof<RecursivePublicInput>) {
+      method(publicInput: RecursivePublicInput, earlierProof: SelfProof<RecursivePublicInput>, senderSignature: Signature) {
         // verify earlier proof
         earlierProof.verify();
         // assert balances are >= 0 for both parties
         publicInput.user1Balance.assertGreaterThanOrEqual(0, "user1 balance cannot be < 0 due to this transfer")
         publicInput.user2Balance.assertGreaterThanOrEqual(0, "user2 balance cannot be < 0 due to this transfer")
+
+        // require the public input to be signed by the asset sender
+        Circuit.if(
+          publicInput.transferFrom1to2.greaterThan(0),
+          senderSignature.verify(publicInput.user1, RecursivePublicInput.toFields(publicInput)),
+          senderSignature.verify(publicInput.user2, RecursivePublicInput.toFields(publicInput))
+        )
 
         earlierProof.publicInput.user1Balance.sub(publicInput.transferFrom1to2).assertEquals(publicInput.user1Balance, "user1 balance is not correct")
         earlierProof.publicInput.user2Balance.add(publicInput.transferFrom1to2).assertEquals(publicInput.user2Balance, "user2 balance is not correct")
@@ -222,10 +230,12 @@ export class Lightning extends SmartContract {
 
     this.network.blockchainLength.assertEquals(this.network.blockchainLength.get())
     timeLock.assertLessThan(Field.fromFields(this.network.blockchainLength.get().toFields()), "cannot withdraw before time lock period ends")
-    
+
     // send the tokens to the user
     const token = new ExampleToken(tokenAddress);
-    token.sendTokens(this.address, userAddress, UInt64.from(balance))
+    const holder = new LightningTokenHoder(this.address, token.token.id);
+    holder.prepareWithdraw(balance);
+    token.approveUpdateAndSend(holder.self, userAddress, UInt64.from(balance));
 
     // reset state for that user
     const [newBalanceRoot] = balanceWitness.computeRootAndKey(
@@ -258,5 +268,15 @@ export class Lightning extends SmartContract {
       ...tokenAddress.toFields(),
       Field(1),
     ]);
+  }
+}
+
+export class LightningTokenHoder extends SmartContract {
+  @method prepareWithdraw(
+    balance: Field
+  ) {
+    // Restrict to be called from in the context of Lightning contract
+    this.self.parent?.parent?.publicKey.assertEquals(this.address);
+    this.balance.subInPlace(UInt64.from(balance));
   }
 }

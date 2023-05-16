@@ -1,4 +1,5 @@
-import { Lightning, RecursiveProgram } from './Lightning';
+import { Lightning, LightningTokenHoder, RecursiveProgram, RecursivePublicInput } from './Lightning';
+// import { saveTxn } from 'mina-transaction-visualizer';
 import { ExampleToken } from './Token';
 import {
   isReady,
@@ -12,6 +13,7 @@ import {
   Field,
   Poseidon,
   MerkleMap,
+  Encoding,
 } from 'snarkyjs';
 
 /*
@@ -26,8 +28,6 @@ let proofsEnabled = false;
 describe('Lightning', () => {
   let deployerAccount: PublicKey,
     deployerKey: PrivateKey,
-    senderAccount: PublicKey,
-    senderKey: PrivateKey,
     zkAppAddress: PublicKey,
     zkAppPrivateKey: PrivateKey,
     tokenPrivateKey: PrivateKey,
@@ -49,8 +49,6 @@ describe('Lightning', () => {
     Mina.setActiveInstance(Local);
     ({ privateKey: deployerKey, publicKey: deployerAccount } =
       Local.testAccounts[0]);
-    ({ privateKey: senderKey, publicKey: senderAccount } =
-      Local.testAccounts[1]);
     zkAppPrivateKey = PrivateKey.random();
     zkAppAddress = zkAppPrivateKey.toPublicKey();
     zkApp = new Lightning(zkAppAddress);
@@ -71,12 +69,13 @@ describe('Lightning', () => {
   });
 
   async function localDeploy() {
+    await LightningTokenHoder.compile();
     const txn = await Mina.transaction(deployerAccount, () => {
-      AccountUpdate.fundNewAccount(deployerAccount);
+      AccountUpdate.fundNewAccount(deployerAccount, 3);
       zkApp.deploy();
       zkApp.initState(timeLockMerkleMap.getRoot(), balanceMerkeleMap.getRoot());
-      AccountUpdate.fundNewAccount(deployerAccount);
       tokenApp.deploy();
+      tokenApp.deployZkapp(zkAppAddress, LightningTokenHoder._verificationKey!);
     });
     await txn.prove();
     await txn.sign([deployerKey, zkAppPrivateKey, tokenPrivateKey]).send();
@@ -190,7 +189,6 @@ describe('Lightning', () => {
       zkApp.serializeBalancekKey(userAddress, tokenAddress)
     );
     const txn1 = await Mina.transaction(deployerAccount, () => {
-      AccountUpdate.fundNewAccount(deployerAccount);
       zkApp.deposit(
         userAddress,
         tokenAddress,
@@ -267,8 +265,8 @@ describe('Lightning', () => {
     await RecursiveProgram.compile()
 
     let proof0 = await RecursiveProgram.baseCase(publicInput)
-    
-    const proof1 = await RecursiveProgram.step({
+
+    const firstTxInChannel = {
       user1Balance: publicInput.user1Balance.sub(Field(20)),
       user2Balance: publicInput.user2Balance.add(Field(20)),
       transferFrom1to2: Field(20),
@@ -277,10 +275,12 @@ describe('Lightning', () => {
       balanceRoot: zkApp.balanceMerkleMapRoot.get(),
       balance1Witness: newBalance1Witness,
       balance2Witness: newBalance2Witness,
-    }, proof0)
+    };
+    const senderSignature = Signature.create(userAddressPrivate, RecursivePublicInput.toFields(firstTxInChannel));
+    
+    const proof1 = await RecursiveProgram.step(firstTxInChannel, proof0, senderSignature);
 
-
-    const proof2 = await RecursiveProgram.step({
+    const secondTxInChannel = {
       user1Balance: publicInput.user1Balance.sub(Field(20)).sub(5),
       user2Balance: publicInput.user2Balance.add(Field(20)).add(5),
       transferFrom1to2: Field(5),
@@ -289,7 +289,9 @@ describe('Lightning', () => {
       balanceRoot: zkApp.balanceMerkleMapRoot.get(),
       balance1Witness: newBalance1Witness,
       balance2Witness: newBalance2Witness,
-    }, proof1)
+    };
+    const senderSignature2 = Signature.create(userAddressPrivate, RecursivePublicInput.toFields(secondTxInChannel));
+    const proof2 = await RecursiveProgram.step(secondTxInChannel, proof1, senderSignature2);
 
 
     // post proof for user1
@@ -308,5 +310,36 @@ describe('Lightning', () => {
     // update the merkle map to reflect the deduction in user1's balance
     balanceMerkeleMap.set(zkApp.serializeBalancekKey(userAddress, tokenAddress), Field(100 - 25));
     expect(zkApp.balanceMerkleMapRoot.get()).toEqual(balanceMerkeleMap.getRoot());
+
+    (Mina.activeInstance as ReturnType<typeof Mina.LocalBlockchain>).setBlockchainLength(timeLock.add(1));
+    const balanceWitnessFinal = balanceMerkeleMap.getWitness(
+      zkApp.serializeBalancekKey(userAddress, tokenAddress)
+    );
+    const timeLockWitnessFinal = timeLockMerkleMap.getWitness(
+      zkApp.serializeTimeLockKey(userAddress, tokenAddress)
+    );
+
+    const txn3 = await Mina.transaction(deployerAccount, () => {
+      zkApp.withdraw(
+        tokenAddress,
+        userAddress,
+        timeLockWitnessFinal,
+        balanceWitnessFinal,
+        Field.fromFields(timeLock.toFields()),
+        Field(100 - 25)
+      );
+    });
+    await txn3.prove();
+    const signed = txn3.sign([deployerKey]);
+    // const legend = {
+    //   [zkAppAddress.toBase58()]: 'lightningApp',
+    //   [tokenAddress.toBase58()]: 'tokenApp',
+    //   [deployerAccount.toBase58()]: 'deployer',
+    //   [userAddress.toBase58()]: 'user',
+    //   [Encoding.TokenId.toBase58(tokenApp.token.id)]: 'TOKEN'
+    // }
+    // saveTxn(signed, 'txn3', legend, './txn3.png');
+    await signed.send();
+    expect(Mina.getBalance(userAddress, tokenApp.token.id)).toEqual(UInt64.from(100 - 25));
   });
 });
